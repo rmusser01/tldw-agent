@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/tldw/tldw-agent/internal/config"
-	"github.com/tldw/tldw-agent/internal/mcp"
+	"github.com/tldw/tldw-agent/internal/types"
 	"github.com/tldw/tldw-agent/internal/workspace"
 )
 
@@ -37,10 +37,10 @@ type GrepMatch struct {
 }
 
 // Grep searches file contents using a regex pattern.
-func (t *SearchTools) Grep(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *SearchTools) Grep(args map[string]interface{}) (*types.ToolResult, error) {
 	pattern, ok := args["pattern"].(string)
 	if !ok || pattern == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "pattern is required",
 		}, nil
@@ -78,7 +78,7 @@ func (t *SearchTools) Grep(args map[string]interface{}) (*mcp.ToolResult, error)
 	}
 	re, err := regexp.Compile(regexFlags + pattern)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("invalid regex pattern: %v", err),
 		}, nil
@@ -157,7 +157,7 @@ func (t *SearchTools) Grep(args map[string]interface{}) (*mcp.ToolResult, error)
 		}
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"matches":        matches,
@@ -224,10 +224,10 @@ func (t *SearchTools) searchFile(path string, re *regexp.Regexp, maxMatches int)
 }
 
 // Glob finds files matching a glob pattern.
-func (t *SearchTools) Glob(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *SearchTools) Glob(args map[string]interface{}) (*types.ToolResult, error) {
 	pattern, ok := args["pattern"].(string)
 	if !ok || pattern == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "pattern is required",
 		}, nil
@@ -246,7 +246,7 @@ func (t *SearchTools) Glob(args map[string]interface{}) (*mcp.ToolResult, error)
 	// Resolve base path
 	absBasePath, err := t.session.ResolvePath(basePath)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: err.Error(),
 		}, nil
@@ -296,13 +296,13 @@ func (t *SearchTools) Glob(args map[string]interface{}) (*mcp.ToolResult, error)
 	})
 
 	if err != nil && err != filepath.SkipAll {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to search: %v", err),
 		}, nil
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"pattern":   pattern,

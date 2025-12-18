@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/tldw/tldw-agent/internal/config"
-	"github.com/tldw/tldw-agent/internal/mcp"
+	"github.com/tldw/tldw-agent/internal/types"
 	"github.com/tldw/tldw-agent/internal/workspace"
 )
 
@@ -109,10 +109,10 @@ type ExecResult struct {
 }
 
 // Run executes an allowlisted command.
-func (e *ExecTools) Run(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (e *ExecTools) Run(args map[string]interface{}) (*types.ToolResult, error) {
 	// Check if execution is enabled
 	if !e.config.Execution.Enabled {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "command execution is disabled",
 		}, nil
@@ -121,7 +121,7 @@ func (e *ExecTools) Run(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Get command ID
 	commandID, _ := args["command_id"].(string)
 	if commandID == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "command_id is required",
 		}, nil
@@ -130,7 +130,7 @@ func (e *ExecTools) Run(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Look up command in allowlist
 	cmd, ok := e.commands[commandID]
 	if !ok {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("command %q not in allowlist", commandID),
 		}, nil
@@ -143,7 +143,7 @@ func (e *ExecTools) Run(args map[string]interface{}) (*mcp.ToolResult, error) {
 			if s, ok := a.(string); ok {
 				// Sanitize argument - reject shell metacharacters
 				if containsShellMeta(s) {
-					return &mcp.ToolResult{
+					return &types.ToolResult{
 						OK:    false,
 						Error: fmt.Sprintf("argument %q contains disallowed characters", s),
 					}, nil
@@ -154,7 +154,7 @@ func (e *ExecTools) Run(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 		// Check max args
 		if cmd.MaxArgs > 0 && len(cmdArgs) > cmd.MaxArgs {
-			return &mcp.ToolResult{
+			return &types.ToolResult{
 				OK:    false,
 				Error: fmt.Sprintf("too many arguments (max %d)", cmd.MaxArgs),
 			}, nil
@@ -164,10 +164,10 @@ func (e *ExecTools) Run(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Get working directory
 	cwd := e.session.Root()
 	if cwdArg, ok := args["cwd"].(string); ok && cwdArg != "" {
-		// Validate path is within workspace
-		absPath, err := e.session.ValidatePath(cwdArg)
+		// Validate and resolve path within workspace
+		absPath, err := e.session.ResolvePath(cwdArg)
 		if err != nil {
-			return &mcp.ToolResult{
+			return &types.ToolResult{
 				OK:    false,
 				Error: fmt.Sprintf("invalid cwd: %v", err),
 			}, nil
@@ -195,13 +195,13 @@ func (e *ExecTools) Run(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Execute
 	result, err := e.executeCommand(fullCmd, cwd, timeout, cmd.Env)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: err.Error(),
 		}, nil
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK:   true,
 		Data: result,
 	}, nil

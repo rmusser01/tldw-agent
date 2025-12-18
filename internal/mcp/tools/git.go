@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/tldw/tldw-agent/internal/config"
-	"github.com/tldw/tldw-agent/internal/mcp"
+	"github.com/tldw/tldw-agent/internal/types"
 	"github.com/tldw/tldw-agent/internal/workspace"
 )
 
@@ -44,18 +44,18 @@ func (t *GitTools) runGit(args ...string) (string, string, error) {
 }
 
 // Status returns git repository status.
-func (t *GitTools) Status(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *GitTools) Status(args map[string]interface{}) (*types.ToolResult, error) {
 	// Check if we're in a git repo
 	stdout, stderr, err := t.runGit("rev-parse", "--is-inside-work-tree")
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("not a git repository: %s", stderr),
 		}, nil
 	}
 
 	if strings.TrimSpace(stdout) != "true" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "not inside a git work tree",
 		}, nil
@@ -64,7 +64,7 @@ func (t *GitTools) Status(args map[string]interface{}) (*mcp.ToolResult, error) 
 	// Get status
 	stdout, stderr, err = t.runGit("status", "--porcelain", "-b")
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("git status failed: %s", stderr),
 		}, nil
@@ -109,7 +109,7 @@ func (t *GitTools) Status(args map[string]interface{}) (*mcp.ToolResult, error) 
 		}
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"branch":    branch,
@@ -122,7 +122,7 @@ func (t *GitTools) Status(args map[string]interface{}) (*mcp.ToolResult, error) 
 }
 
 // Diff shows git diff.
-func (t *GitTools) Diff(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *GitTools) Diff(args map[string]interface{}) (*types.ToolResult, error) {
 	gitArgs := []string{"diff"}
 
 	// Check if staged
@@ -142,7 +142,7 @@ func (t *GitTools) Diff(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 	stdout, stderr, err := t.runGit(gitArgs...)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("git diff failed: %s", stderr),
 		}, nil
@@ -157,7 +157,7 @@ func (t *GitTools) Diff(args map[string]interface{}) (*mcp.ToolResult, error) {
 		truncated = true
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"diff":      diff,
@@ -167,7 +167,7 @@ func (t *GitTools) Diff(args map[string]interface{}) (*mcp.ToolResult, error) {
 }
 
 // Log shows recent commits.
-func (t *GitTools) Log(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *GitTools) Log(args map[string]interface{}) (*types.ToolResult, error) {
 	count := 10
 	if c, ok := args["count"].(float64); ok {
 		count = int(c)
@@ -182,7 +182,7 @@ func (t *GitTools) Log(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 	stdout, stderr, err := t.runGit(gitArgs...)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("git log failed: %s", stderr),
 		}, nil
@@ -211,7 +211,7 @@ func (t *GitTools) Log(args map[string]interface{}) (*mcp.ToolResult, error) {
 		})
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"commits": commits,
@@ -221,11 +221,11 @@ func (t *GitTools) Log(args map[string]interface{}) (*mcp.ToolResult, error) {
 }
 
 // Branch shows branch information.
-func (t *GitTools) Branch(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *GitTools) Branch(args map[string]interface{}) (*types.ToolResult, error) {
 	// Get current branch
 	currentBranch, stderr, err := t.runGit("rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("git rev-parse failed: %s", stderr),
 		}, nil
@@ -235,7 +235,7 @@ func (t *GitTools) Branch(args map[string]interface{}) (*mcp.ToolResult, error) 
 	// Get all branches
 	stdout, stderr, err := t.runGit("branch", "-a", "--format=%(refname:short)|%(upstream:short)|%(upstream:track)")
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("git branch failed: %s", stderr),
 		}, nil
@@ -267,7 +267,7 @@ func (t *GitTools) Branch(args map[string]interface{}) (*mcp.ToolResult, error) 
 		branches = append(branches, branch)
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"current":  currentBranch,
@@ -277,10 +277,10 @@ func (t *GitTools) Branch(args map[string]interface{}) (*mcp.ToolResult, error) 
 }
 
 // Add stages files for commit.
-func (t *GitTools) Add(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *GitTools) Add(args map[string]interface{}) (*types.ToolResult, error) {
 	paths, ok := args["paths"].([]interface{})
 	if !ok || len(paths) == 0 {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "paths is required",
 		}, nil
@@ -295,13 +295,13 @@ func (t *GitTools) Add(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 	stdout, stderr, err := t.runGit(gitArgs...)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("git add failed: %s %s", stderr, stdout),
 		}, nil
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"staged": paths,
@@ -310,10 +310,10 @@ func (t *GitTools) Add(args map[string]interface{}) (*mcp.ToolResult, error) {
 }
 
 // Commit creates a git commit.
-func (t *GitTools) Commit(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *GitTools) Commit(args map[string]interface{}) (*types.ToolResult, error) {
 	message, ok := args["message"].(string)
 	if !ok || message == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "message is required",
 		}, nil
@@ -321,7 +321,7 @@ func (t *GitTools) Commit(args map[string]interface{}) (*mcp.ToolResult, error) 
 
 	stdout, stderr, err := t.runGit("commit", "-m", message)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("git commit failed: %s %s", stderr, stdout),
 		}, nil
@@ -331,7 +331,7 @@ func (t *GitTools) Commit(args map[string]interface{}) (*mcp.ToolResult, error) 
 	hash, _, _ := t.runGit("rev-parse", "HEAD")
 	hash = strings.TrimSpace(hash)
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"hash":    hash,

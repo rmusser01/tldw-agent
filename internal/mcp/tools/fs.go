@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/tldw/tldw-agent/internal/config"
-	"github.com/tldw/tldw-agent/internal/mcp"
+	"github.com/tldw/tldw-agent/internal/types"
 	"github.com/tldw/tldw-agent/internal/workspace"
 )
 
@@ -38,7 +38,7 @@ type FileEntry struct {
 }
 
 // List lists directory contents.
-func (t *FSTools) List(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *FSTools) List(args map[string]interface{}) (*types.ToolResult, error) {
 	// Parse arguments
 	path, _ := args["path"].(string)
 	if path == "" {
@@ -63,7 +63,7 @@ func (t *FSTools) List(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Resolve path
 	absPath, err := t.session.ResolvePath(path)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: err.Error(),
 		}, nil
@@ -75,13 +75,13 @@ func (t *FSTools) List(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 	err = t.walkDir(absPath, depth, includeHidden, maxEntries, &entries, &truncated)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to list directory: %v", err),
 		}, nil
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"path":      path,
@@ -153,10 +153,10 @@ func (t *FSTools) walkDir(root string, maxDepth int, includeHidden bool, maxEntr
 }
 
 // Read reads file contents.
-func (t *FSTools) Read(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *FSTools) Read(args map[string]interface{}) (*types.ToolResult, error) {
 	path, ok := args["path"].(string)
 	if !ok || path == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "path is required",
 		}, nil
@@ -165,7 +165,7 @@ func (t *FSTools) Read(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Resolve path
 	absPath, err := t.session.ResolvePath(path)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: err.Error(),
 		}, nil
@@ -174,21 +174,21 @@ func (t *FSTools) Read(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Check file size
 	info, err := os.Stat(absPath)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to stat file: %v", err),
 		}, nil
 	}
 
 	if info.IsDir() {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "path is a directory, not a file",
 		}, nil
 	}
 
 	if info.Size() > t.config.Workspace.MaxFileSizeBytes {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("file too large: %d bytes (max %d)", info.Size(), t.config.Workspace.MaxFileSizeBytes),
 		}, nil
@@ -207,7 +207,7 @@ func (t *FSTools) Read(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Read file
 	file, err := os.Open(absPath)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to open file: %v", err),
 		}, nil
@@ -230,7 +230,7 @@ func (t *FSTools) Read(args map[string]interface{}) (*mcp.ToolResult, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to read file: %v", err),
 		}, nil
@@ -238,7 +238,7 @@ func (t *FSTools) Read(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 	content := strings.Join(lines, "\n")
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"path":       path,
@@ -250,10 +250,10 @@ func (t *FSTools) Read(args map[string]interface{}) (*mcp.ToolResult, error) {
 }
 
 // Write writes content to a file.
-func (t *FSTools) Write(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *FSTools) Write(args map[string]interface{}) (*types.ToolResult, error) {
 	path, ok := args["path"].(string)
 	if !ok || path == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "path is required",
 		}, nil
@@ -261,7 +261,7 @@ func (t *FSTools) Write(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 	content, ok := args["content"].(string)
 	if !ok {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "content is required",
 		}, nil
@@ -270,7 +270,7 @@ func (t *FSTools) Write(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Resolve path
 	absPath, err := t.session.ResolvePath(path)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: err.Error(),
 		}, nil
@@ -279,7 +279,7 @@ func (t *FSTools) Write(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Ensure parent directory exists
 	dir := filepath.Dir(absPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to create parent directory: %v", err),
 		}, nil
@@ -287,13 +287,13 @@ func (t *FSTools) Write(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 	// Write file
 	if err := os.WriteFile(absPath, []byte(content), 0644); err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to write file: %v", err),
 		}, nil
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"path":       path,
@@ -304,10 +304,10 @@ func (t *FSTools) Write(args map[string]interface{}) (*mcp.ToolResult, error) {
 }
 
 // ApplyPatch applies a unified diff patch.
-func (t *FSTools) ApplyPatch(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *FSTools) ApplyPatch(args map[string]interface{}) (*types.ToolResult, error) {
 	patch, ok := args["patch"].(string)
 	if !ok || patch == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "patch is required",
 		}, nil
@@ -315,17 +315,17 @@ func (t *FSTools) ApplyPatch(args map[string]interface{}) (*mcp.ToolResult, erro
 
 	// Parse the unified diff
 	// For now, return a placeholder - full implementation in Phase 2
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK:    false,
 		Error: "fs.apply_patch not yet fully implemented",
 	}, nil
 }
 
 // Mkdir creates a directory.
-func (t *FSTools) Mkdir(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *FSTools) Mkdir(args map[string]interface{}) (*types.ToolResult, error) {
 	path, ok := args["path"].(string)
 	if !ok || path == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "path is required",
 		}, nil
@@ -334,7 +334,7 @@ func (t *FSTools) Mkdir(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Resolve path
 	absPath, err := t.session.ResolvePath(path)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: err.Error(),
 		}, nil
@@ -342,13 +342,13 @@ func (t *FSTools) Mkdir(args map[string]interface{}) (*mcp.ToolResult, error) {
 
 	// Create directory
 	if err := os.MkdirAll(absPath, 0755); err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to create directory: %v", err),
 		}, nil
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"path":    path,
@@ -358,10 +358,10 @@ func (t *FSTools) Mkdir(args map[string]interface{}) (*mcp.ToolResult, error) {
 }
 
 // Delete deletes a file or directory.
-func (t *FSTools) Delete(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (t *FSTools) Delete(args map[string]interface{}) (*types.ToolResult, error) {
 	path, ok := args["path"].(string)
 	if !ok || path == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "path is required",
 		}, nil
@@ -375,7 +375,7 @@ func (t *FSTools) Delete(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Resolve path
 	absPath, err := t.session.ResolvePath(path)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: err.Error(),
 		}, nil
@@ -384,7 +384,7 @@ func (t *FSTools) Delete(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Check if path exists
 	info, err := os.Stat(absPath)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("path does not exist: %v", err),
 		}, nil
@@ -393,21 +393,21 @@ func (t *FSTools) Delete(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Delete
 	if info.IsDir() && recursive {
 		if err := os.RemoveAll(absPath); err != nil {
-			return &mcp.ToolResult{
+			return &types.ToolResult{
 				OK:    false,
 				Error: fmt.Sprintf("failed to delete directory: %v", err),
 			}, nil
 		}
 	} else {
 		if err := os.Remove(absPath); err != nil {
-			return &mcp.ToolResult{
+			return &types.ToolResult{
 				OK:    false,
 				Error: fmt.Sprintf("failed to delete: %v", err),
 			}, nil
 		}
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"path":    path,

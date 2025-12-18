@@ -7,6 +7,7 @@ import (
 
 	"github.com/tldw/tldw-agent/internal/config"
 	"github.com/tldw/tldw-agent/internal/mcp/tools"
+	"github.com/tldw/tldw-agent/internal/types"
 	"github.com/tldw/tldw-agent/internal/workspace"
 )
 
@@ -18,12 +19,8 @@ type ToolDefinition struct {
 	Tier        string                 `json:"tier"` // "read", "write", "exec"
 }
 
-// ToolResult represents the result of a tool execution.
-type ToolResult struct {
-	OK    bool        `json:"ok"`
-	Data  interface{} `json:"data,omitempty"`
-	Error string      `json:"error,omitempty"`
-}
+// ToolResult is an alias for types.ToolResult for convenience.
+type ToolResult = types.ToolResult
 
 // Server manages MCP tools and executes tool calls.
 type Server struct {

@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/tldw/tldw-agent/internal/config"
-	"github.com/tldw/tldw-agent/internal/mcp"
+	"github.com/tldw/tldw-agent/internal/types"
 )
 
 // Session manages the current workspace state.
@@ -79,7 +79,7 @@ func (s *Session) AbsCwd() string {
 }
 
 // List returns information about registered workspaces.
-func (s *Session) List() (*mcp.ToolResult, error) {
+func (s *Session) List() (*types.ToolResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -92,7 +92,7 @@ func (s *Session) List() (*mcp.ToolResult, error) {
 		})
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"workspaces": workspaces,
@@ -101,18 +101,18 @@ func (s *Session) List() (*mcp.ToolResult, error) {
 }
 
 // Pwd returns the current working directory.
-func (s *Session) Pwd() (*mcp.ToolResult, error) {
+func (s *Session) Pwd() (*types.ToolResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.root == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "no workspace set",
 		}, nil
 	}
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"root": s.root,
@@ -123,10 +123,10 @@ func (s *Session) Pwd() (*mcp.ToolResult, error) {
 }
 
 // Chdir changes the current working directory.
-func (s *Session) Chdir(args map[string]interface{}) (*mcp.ToolResult, error) {
+func (s *Session) Chdir(args map[string]interface{}) (*types.ToolResult, error) {
 	pathArg, ok := args["path"].(string)
 	if !ok {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "path is required",
 		}, nil
@@ -136,7 +136,7 @@ func (s *Session) Chdir(args map[string]interface{}) (*mcp.ToolResult, error) {
 	defer s.mu.Unlock()
 
 	if s.root == "" {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "no workspace set",
 		}, nil
@@ -153,7 +153,7 @@ func (s *Session) Chdir(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Validate the path is within workspace
 	absPath := filepath.Join(s.root, newCwd)
 	if valid, err := s.validatePathLocked(absPath); !valid {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("invalid path: %v", err),
 		}, nil
@@ -162,13 +162,13 @@ func (s *Session) Chdir(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Verify directory exists
 	info, err := os.Stat(absPath)
 	if err != nil {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: fmt.Sprintf("failed to access directory: %v", err),
 		}, nil
 	}
 	if !info.IsDir() {
-		return &mcp.ToolResult{
+		return &types.ToolResult{
 			OK:    false,
 			Error: "path is not a directory",
 		}, nil
@@ -177,7 +177,7 @@ func (s *Session) Chdir(args map[string]interface{}) (*mcp.ToolResult, error) {
 	// Clean and set the new cwd
 	s.cwd = filepath.Clean(newCwd)
 
-	return &mcp.ToolResult{
+	return &types.ToolResult{
 		OK: true,
 		Data: map[string]interface{}{
 			"cwd": s.cwd,
