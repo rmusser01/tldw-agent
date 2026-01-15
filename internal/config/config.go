@@ -15,12 +15,20 @@ type Config struct {
 	Workspace WorkspaceConfig `yaml:"workspace"`
 	Execution ExecutionConfig `yaml:"execution"`
 	Security  SecurityConfig  `yaml:"security"`
+	Agent     AgentConfig     `yaml:"agent"`
 }
 
 // ServerConfig holds LLM server connection settings.
 type ServerConfig struct {
 	LLMEndpoint string `yaml:"llm_endpoint"`
 	APIKey      string `yaml:"api_key"`
+}
+
+// AgentConfig holds downstream ACP agent launch settings.
+type AgentConfig struct {
+	Command string   `yaml:"command"`
+	Args    []string `yaml:"args"`
+	Env     []string `yaml:"env"`
 }
 
 // WorkspaceConfig holds workspace-related settings.
@@ -43,12 +51,12 @@ type CustomCommand struct {
 
 // ExecutionConfig holds command execution settings.
 type ExecutionConfig struct {
-	Enabled           bool            `yaml:"enabled"`
-	TimeoutMs         int             `yaml:"timeout_ms"`
-	Shell             string          `yaml:"shell"`
-	NetworkAllowed    bool            `yaml:"network_allowed"`
-	MaxOutputBytes    int             `yaml:"max_output_bytes"`
-	CustomCommands    []CustomCommand `yaml:"custom_commands"`
+	Enabled        bool            `yaml:"enabled"`
+	TimeoutMs      int             `yaml:"timeout_ms"`
+	Shell          string          `yaml:"shell"`
+	NetworkAllowed bool            `yaml:"network_allowed"`
+	MaxOutputBytes int             `yaml:"max_output_bytes"`
+	CustomCommands []CustomCommand `yaml:"custom_commands"`
 }
 
 // SecurityConfig holds security-related settings.
@@ -88,6 +96,11 @@ func Default() *Config {
 			RequireApprovalForWrites: true,
 			RequireApprovalForExec:   true,
 			RedactSecrets:            true,
+		},
+		Agent: AgentConfig{
+			Command: "",
+			Args:    []string{},
+			Env:     []string{},
 		},
 	}
 }
