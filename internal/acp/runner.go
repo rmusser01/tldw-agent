@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/tldw/tldw-agent/internal/config"
 	"github.com/tldw/tldw-agent/internal/mcp/tools"
@@ -95,7 +96,7 @@ func (r *Runner) handleUpstreamRequest(msg *RPCMessage) (*RPCResponse, error) {
 func (r *Runner) handleInitialize(msg *RPCMessage) (*RPCResponse, error) {
 	agentCapabilities := r.buildAgentCapabilities()
 	result := map[string]interface{}{
-		"protocolVersion": defaultProtocolVersion,
+		"protocolVersion":   defaultProtocolVersion,
 		"agentCapabilities": agentCapabilities,
 		"agentInfo": map[string]string{
 			"name":    runnerName,
@@ -136,10 +137,6 @@ func (r *Runner) handleSessionNew(msg *RPCMessage) (*RPCResponse, error) {
 	}
 
 	runErr := make(chan error, 1)
-	go func() {
-		runErr <- downstream.Run()
-	}()
-
 	session := &Session{
 		downstream: downstream,
 		process:    cmd,
@@ -155,6 +152,10 @@ func (r *Runner) handleSessionNew(msg *RPCMessage) (*RPCResponse, error) {
 	downstream.SetNotificationHandler(func(note *RPCMessage) {
 		r.handleDownstreamNotification(session, note)
 	})
+
+	go func() {
+		runErr <- downstream.Run()
+	}()
 
 	initParams := map[string]interface{}{
 		"protocolVersion": defaultProtocolVersion,
@@ -178,6 +179,9 @@ func (r *Runner) handleSessionNew(msg *RPCMessage) (*RPCResponse, error) {
 	}
 	if initResp != nil && initResp.Error != nil {
 		return &RPCResponse{JSONRPC: JSONRPCVersion, ID: msg.ID, Error: initResp.Error}, nil
+	}
+	if initResp != nil && initResp.Result != nil {
+		r.updateCachedCapabilities(initResp.Result)
 	}
 
 	resp, err := downstream.CallRaw(context.Background(), "session/new", msg.Params)
@@ -255,6 +259,183 @@ func (r *Runner) handleSessionClose(msg *RPCMessage) (*RPCResponse, error) {
 
 	r.cleanupSession(params.SessionID)
 	return NewResultResponse(msg.ID, nil), nil
+}
+
+func (r *Runner) buildAgentCapabilities() map[string]interface{} {
+	base := defaultAgentCapabilities()
+	cached := r.getCachedCapabilities()
+	if cached == nil {
+		if refreshed := r.refreshCapabilities(); refreshed != nil {
+			cached = refreshed
+		}
+	}
+	if cached == nil {
+		return base
+	}
+
+	merged := copyMap(base)
+	if promptCaps, ok := cached["promptCapabilities"]; ok {
+		merged["promptCapabilities"] = promptCaps
+	}
+	if mcpCaps, ok := cached["mcpCapabilities"]; ok {
+		merged["mcpCapabilities"] = mcpCaps
+	}
+	if sessionCaps, ok := cached["sessionCapabilities"]; ok {
+		merged["sessionCapabilities"] = sessionCaps
+	}
+	merged["loadSession"] = false
+	return merged
+}
+
+func defaultAgentCapabilities() map[string]interface{} {
+	return map[string]interface{}{
+		"loadSession": false,
+		"promptCapabilities": map[string]bool{
+			"image":           false,
+			"audio":           false,
+			"embeddedContext": false,
+		},
+		"mcpCapabilities": map[string]bool{
+			"http": false,
+			"sse":  false,
+		},
+		"sessionCapabilities": map[string]interface{}{},
+	}
+}
+
+func (r *Runner) getCachedCapabilities() map[string]interface{} {
+	r.capsMu.Lock()
+	defer r.capsMu.Unlock()
+	if r.cachedCaps == nil {
+		return nil
+	}
+	return copyMap(r.cachedCaps)
+}
+
+func (r *Runner) updateCachedCapabilities(raw json.RawMessage) {
+	caps := parseAgentCapabilities(raw)
+	if caps == nil {
+		return
+	}
+	r.capsMu.Lock()
+	r.cachedCaps = caps
+	r.capsMu.Unlock()
+}
+
+func (r *Runner) refreshCapabilities() map[string]interface{} {
+	downstream, cmd, err := r.spawnFunc()
+	if err != nil {
+		return nil
+	}
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- downstream.Run()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	initParams := map[string]interface{}{
+		"protocolVersion": defaultProtocolVersion,
+		"clientCapabilities": map[string]interface{}{
+			"fs": map[string]bool{
+				"readTextFile":  true,
+				"writeTextFile": true,
+			},
+			"terminal": r.cfg.Execution.Enabled,
+		},
+		"clientInfo": map[string]string{
+			"name":    runnerName,
+			"title":   "TLDW ACP Runner",
+			"version": runnerVersion,
+		},
+	}
+
+	resp, err := downstream.Call(ctx, "initialize", initParams)
+	r.terminateProcess(cmd)
+	select {
+	case <-runErr:
+	default:
+	}
+	if err != nil || resp == nil || resp.Error != nil {
+		return nil
+	}
+
+	caps := parseAgentCapabilities(resp.Result)
+	if caps == nil {
+		return nil
+	}
+	r.capsMu.Lock()
+	r.cachedCaps = caps
+	r.capsMu.Unlock()
+	return copyMap(caps)
+}
+
+func parseAgentCapabilities(raw json.RawMessage) map[string]interface{} {
+	if raw == nil {
+		return nil
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil
+	}
+	caps, ok := payload["agentCapabilities"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	if _, ok := caps["mcpCapabilities"]; !ok {
+		if legacy, ok := caps["mcp"].(map[string]interface{}); ok {
+			caps["mcpCapabilities"] = legacy
+		}
+	}
+	return caps
+}
+
+func copyMap(src map[string]interface{}) map[string]interface{} {
+	dst := make(map[string]interface{}, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+func (r *Runner) watchSession(sessionID string, runErr <-chan error) {
+	if runErr == nil {
+		return
+	}
+	<-runErr
+	r.cleanupSession(sessionID)
+}
+
+func (r *Runner) cleanupSession(sessionID string) {
+	r.sessionsMu.Lock()
+	session := r.sessions[sessionID]
+	delete(r.sessions, sessionID)
+	r.sessionsMu.Unlock()
+	if session == nil {
+		return
+	}
+	r.terminateProcess(session.process)
+}
+
+func (r *Runner) terminateProcess(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	_ = cmd.Process.Kill()
+	_, _ = cmd.Process.Wait()
+}
+
+func (r *Runner) shutdown() {
+	r.sessionsMu.Lock()
+	ids := make([]string, 0, len(r.sessions))
+	for sessionID := range r.sessions {
+		ids = append(ids, sessionID)
+	}
+	r.sessionsMu.Unlock()
+	for _, sessionID := range ids {
+		r.cleanupSession(sessionID)
+	}
 }
 
 func (r *Runner) handleDownstreamNotification(session *Session, msg *RPCMessage) {
